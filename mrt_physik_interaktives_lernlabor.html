@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRT-Physik Lernlabor für Medizinstudierende</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+        }
+        .active-phase-btn {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border-color: #60a5fa !important;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
+        }
+        .coil-glow {
+            transition: filter 0.1s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/90 sticky top-0 z-30 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 font-bold text-xl shadow-inner">
+                    B₀
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold text-white tracking-tight">MRT-Physik Interaktives Lernlabor</h1>
+                    <p class="text-xs text-slate-400">Präzession • HF-Impuls • T1, T2 & T2* Relaxation • Spin-Echo & Spuleninduktion</p>
+                </div>
+            </div>
+
+            <!-- Tissue Presets -->
+            <div class="flex items-center space-x-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                <span class="text-xs font-medium text-slate-400 px-2 hidden sm:inline">Gewebe-Profil:</span>
+                <button onclick="setTissue('fett')" id="btn-tissue-fett" class="tissue-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    🧈 Fettgewebe
+                </button>
+                <button onclick="setTissue('wm')" id="btn-tissue-wm" class="tissue-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white border border-transparent">
+                    🧠 Weiße Substanz
+                </button>
+                <button onclick="setTissue('liquor')" id="btn-tissue-liquor" class="tissue-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white border border-transparent">
+                    💧 Liquor / Wasser
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left / Center Column: 3D Simulation & Controls (7 Cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+
+            <!-- 3D Viewport Card -->
+            <div class="glass-panel rounded-2xl overflow-hidden flex flex-col relative border border-slate-800 shadow-2xl">
+                <!-- Top Overlay Info -->
+                <div class="p-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap justify-between items-center gap-2 z-10">
+                    <div class="flex items-center space-x-4 text-xs">
+                        <span class="flex items-center gap-1.5 font-medium text-emerald-400">
+                            <span class="w-3 h-3 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_#34d399]"></span>
+                            Summenvektor M
+                        </span>
+                        <span class="flex items-center gap-1.5 font-medium text-sky-400">
+                            <span class="w-3 h-3 rounded-full bg-sky-400 inline-block"></span>
+                            Längs (M<sub>z</sub>)
+                        </span>
+                        <span class="flex items-center gap-1.5 font-medium text-rose-400">
+                            <span class="w-3 h-3 rounded-full bg-rose-400 inline-block"></span>
+                            Quer (M<sub>xy</sub>)
+                        </span>
+                        <span class="flex items-center gap-1.5 font-medium text-amber-300">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-300 inline-block"></span>
+                            Einzelne Protonen-Spins
+                        </span>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <label class="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
+                            <input type="checkbox" id="toggle-inhomogeneity" checked onchange="toggleInhomogeneity()" class="accent-blue-500 rounded">
+                            <span>B₀-Inhomogenität (T2* Effekt)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 3D Canvas Container -->
+                <div id="canvas-container" class="w-full h-[360px] sm:h-[420px] relative bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 cursor-grab active:cursor-grabbing">
+                    <!-- B0 Indicator Overlay -->
+                    <div class="absolute top-4 left-4 pointer-events-none flex flex-col items-center bg-slate-900/80 px-3 py-2 rounded-xl border border-slate-700/70">
+                        <span class="text-xs font-bold text-blue-400 tracking-wider">↑ B₀ Hauptmagnetfeld (z-Achse)</span>
+                        <span class="text-[11px] text-slate-400">Patient liegt längs im Rohr</span>
+                    </div>
+
+                    <!-- Receiver Coil Indicator Overlay -->
+                    <div id="coil-status-badge" class="absolute bottom-4 right-4 pointer-events-none flex items-center gap-2 bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-700/70 transition-all duration-150">
+                        <div id="coil-led" class="w-3 h-3 rounded-full bg-slate-600"></div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">Empfangsspule (xy-Ebene)</div>
+                            <div id="coil-voltage-text" class="text-[11px] text-slate-400 font-mono">Signal: 0.00 mV</div>
+                        </div>
+                    </div>
+
+                    <!-- Camera Hint -->
+                    <div class="absolute bottom-3 left-4 pointer-events-none text-[11px] text-slate-500">
+                        🖱️ Gedrückt halten & ziehen zum Drehen der 3D-Ansicht
+                    </div>
+                </div>
+
+                <!-- Step-by-Step Phase Controls -->
+                <div class="p-3.5 bg-slate-900 border-t border-slate-800">
+                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 flex justify-between items-center">
+                        <span>Ablauf der MRT-Messung (Klicke die Schritte nacheinander an):</span>
+                        <span id="sim-timer" class="font-mono text-slate-300 bg-slate-800 px-2 py-0.5 rounded">t = 0 ms</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button onclick="setPhase(1)" id="phase-btn-1" class="phase-btn active-phase-btn p-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-left transition-all flex flex-col justify-between">
+                            <span class="text-[11px] font-bold text-blue-300">SCHRITT 1</span>
+                            <span class="text-xs sm:text-sm font-semibold text-white mt-0.5">Grundzustand (B₀)</span>
+                            <span class="text-[10px] text-slate-300 mt-1">Spins außer Phase, M<sub>z</sub> maximal</span>
+                        </button>
+
+                        <button onclick="setPhase(2)" id="phase-btn-2" class="phase-btn p-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-left transition-all flex flex-col justify-between">
+                            <span class="text-[11px] font-bold text-rose-400">SCHRITT 2</span>
+                            <span class="text-xs sm:text-sm font-semibold text-white mt-0.5">90°-HF-Impuls</span>
+                            <span class="text-[10px] text-slate-300 mt-1">Kippen & Synchronisieren</span>
+                        </button>
+
+                        <button onclick="setPhase(3)" id="phase-btn-3" class="phase-btn p-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-left transition-all flex flex-col justify-between">
+                            <span class="text-[11px] font-bold text-amber-400">SCHRITT 3</span>
+                            <span class="text-xs sm:text-sm font-semibold text-white mt-0.5">Relaxation (T1/T2*)</span>
+                            <span class="text-[10px] text-slate-300 mt-1">Auffächern & Rückkehr</span>
+                        </button>
+
+                        <button onclick="triggerSpinEcho()" id="phase-btn-4" class="phase-btn p-2.5 rounded-xl border border-purple-500/40 bg-purple-950/40 hover:bg-purple-900/50 text-left transition-all flex flex-col justify-between">
+                            <span class="text-[11px] font-bold text-purple-300">SCHRITT 4 (BONUS)</span>
+                            <span class="text-xs sm:text-sm font-semibold text-white mt-0.5">180°-Spin-Echo</span>
+                            <span class="text-[10px] text-purple-200 mt-1">T2* umkehren → echtes T2</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Explanation Box for Current Phase -->
+            <div class="glass-panel rounded-2xl p-4 border border-blue-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/30 shadow-lg">
+                <div class="flex items-start gap-3">
+                    <div id="explanation-icon" class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-xl shrink-0 mt-0.5">
+                        🧭
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h2 id="explanation-title" class="text-base font-bold text-white">1. Grundzustand im starken Magnetfeld (B₀)</h2>
+                            <span id="explanation-badge" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                Larmor-Präzession
+                            </span>
+                        </div>
+                        <p id="explanation-text" class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed"></p>
+                        <div id="explanation-analogy" class="mt-3 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-amber-200/90 leading-relaxed"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Live Graphs & Parameter Readouts (5 Cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-3.5">
+
+            <!-- Current Vector Readout Bar -->
+            <div class="glass-panel rounded-2xl p-3.5 border border-slate-800 grid grid-cols-3 gap-2 text-center">
+                <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <div class="text-[11px] text-sky-400 font-semibold">Längsmagnetisierung M<sub>z</sub></div>
+                    <div id="readout-mz" class="text-lg font-bold text-white font-mono mt-0.5">100%</div>
+                    <div class="text-[10px] text-slate-400">T1-Erholung (z-Achse)</div>
+                </div>
+                <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <div class="text-[11px] text-rose-400 font-semibold">Quermagnetisierung M<sub>xy</sub></div>
+                    <div id="readout-mxy" class="text-lg font-bold text-white font-mono mt-0.5">0%</div>
+                    <div class="text-[10px] text-slate-400">Gemessenes Signal (T2*)</div>
+                </div>
+                <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80">
+                    <div class="text-[11px] text-purple-400 font-semibold">Reine T2-Hüllkurve</div>
+                    <div id="readout-t2" class="text-lg font-bold text-white font-mono mt-0.5">0%</div>
+                    <div class="text-[10px] text-slate-400">Ohne Feld-Inhomogenität</div>
+                </div>
+            </div>
+
+            <!-- Graph 1: T1 Longitudinal Relaxation -->
+            <div class="glass-panel rounded-2xl p-3.5 border border-slate-800 flex flex-col">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div>
+                        <h3 class="text-xs sm:text-sm font-bold text-sky-400 flex items-center gap-1.5">
+                            <span>📈 1. T1-Relaxation: Längsmagnetisierung M<sub>z</sub>(t)</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-400">Spin-Gitter-Relaxation (Wiederaufrichten entlang B₀)</p>
+                    </div>
+                    <span id="t1-val-badge" class="text-xs font-mono bg-sky-950 text-sky-300 px-2 py-0.5 rounded border border-sky-800">T1 = 250 ms</span>
+                </div>
+                <canvas id="canvas-t1" class="w-full h-28 bg-slate-950 rounded-xl border border-slate-800/90"></canvas>
+            </div>
+
+            <!-- Graph 2: T2 & T2* Transverse Relaxation -->
+            <div class="glass-panel rounded-2xl p-3.5 border border-slate-800 flex flex-col">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div>
+                        <h3 class="text-xs sm:text-sm font-bold text-rose-400 flex items-center gap-1.5">
+                            <span>📉 2. T2 & T2*-Relaxation: Quermagnetisierung M<sub>xy</sub>(t)</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-400">Gestrichelt (lila) = wahre T2 • Durchgezogen (rot) = T2* mit Spin-Echo</p>
+                    </div>
+                    <span id="t2-val-badge" class="text-xs font-mono bg-rose-950 text-rose-300 px-2 py-0.5 rounded border border-rose-800">T2 = 80 ms</span>
+                </div>
+                <canvas id="canvas-t2" class="w-full h-28 bg-slate-950 rounded-xl border border-slate-800/90"></canvas>
+            </div>
+
+            <!-- Graph 3: Receiver Coil Induction Signal (FID) -->
+            <div class="glass-panel rounded-2xl p-3.5 border border-slate-800 flex flex-col">
+                <div class="flex justify-between items-center mb-1.5">
+                    <div>
+                        <h3 class="text-xs sm:text-sm font-bold text-amber-400 flex items-center gap-1.5">
+                            <span>⚡ 3. Empfangsspule: Induzierte Wechselspannung (FID)</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-400">Faraday-Induktion: Nur der rotierende M<sub>xy</sub>-Anteil erzeugt Strom!</p>
+                    </div>
+                    <span class="text-[11px] font-mono bg-amber-950/80 text-amber-300 px-2 py-0.5 rounded border border-amber-800/80">U(t) ~ M<sub>xy</sub> · sin(ω₀t)</span>
+                </div>
+                <canvas id="canvas-fid" class="w-full h-28 bg-slate-950 rounded-xl border border-slate-800/90"></canvas>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Bottom Kompendium: Alltags-Analogien & Prüfungswissen für Mediziner -->
+    <section class="max-w-7xl w-full mx-auto px-4 pb-8 pt-2">
+        <div class="glass-panel rounded-2xl p-5 border border-slate-800">
+            <h2 class="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <span>🎓</span>
+                <span>Spickzettel für die Vorklinik: Alle 5 Kernfragen mit Alltags-Analogien erklärt</span>
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs sm:text-sm">
+                <!-- Card 1: Präzession -->
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                    <div>
+                        <div class="text-blue-400 font-bold mb-1 flex items-center justify-between">
+                            <span>1. Was bedeutet „Präzession“?</span>
+                            <span class="text-base">陀</span>
+                        </div>
+                        <p class="text-slate-300 leading-relaxed">
+                            Wasserstoff-Protonen (H⁺) besitzen einen Eigendrehimpuls (Spin) und wirken wie winzige Stabmagnete. Bringt man sie in das starke Hauptmagnetfeld <strong>B₀</strong>, richten sie sich nicht starr wie eine Kompassnadel aus, sondern <strong>taumeln auf einem Kegelmantel</strong> um die B₀-Achse.
+                        </p>
+                    </div>
+                    <div class="mt-3 pt-2.5 border-t border-slate-800 text-amber-300/90 text-xs">
+                        <strong>💡 Kreisel-Analogie:</strong> Wie ein angestoßener Kinderkreisel, der nicht sofort umfällt, sondern mit seiner Achse im Kreis taumelt. Die Taumelfrequenz heißt <em>Larmor-Frequenz</em> ($\omega_0 = \gamma \cdot B_0$).
+                    </div>
+                </div>
+
+                <!-- Card 2: Empfangsspule -->
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                    <div>
+                        <div class="text-amber-400 font-bold mb-1 flex items-center justify-between">
+                            <span>2. Wie fängt die Spule das Signal auf?</span>
+                            <span class="text-base">🚲</span>
+                        </div>
+                        <p class="text-slate-300 leading-relaxed">
+                            Nach dem <strong>Faradayschen Induktionsgesetz</strong> entsteht in einer Leiterschleife (Empfangsspule) nur dann eine elektrische Spannung, wenn sich das Magnetfeld durch die Spule <em>zeitlich ändert</em>. Ein starrer Magnet entlang der z-Achse ($M_z$) bewirkt nichts. Erst wenn der Summenvektor in die xy-Ebene gekippt wird ($M_{xy}$), streicht er wie ein Leuchtturm-Strahl ständig an der Spule vorbei!
+                        </p>
+                    </div>
+                    <div class="mt-3 pt-2.5 border-t border-slate-800 text-amber-300/90 text-xs">
+                        <strong>💡 Fahrraddynamo-Analogie:</strong> Solange das Rad steht ($M_z$), brennt kein Licht. Erst wenn der Magnet im Dynamo an der Kupferspule vorbeirotiert ($M_{xy}$), entsteht Wechselspannung (das <strong>FID-Signal</strong>).
+                    </div>
+                </div>
+
+                <!-- Card 3: 90 Grad Impuls -->
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                    <div>
+                        <div class="text-rose-400 font-bold mb-1 flex items-center justify-between">
+                            <span>3. Was macht der 90°-HF-Impuls?</span>
+                            <span class="text-base">🎪</span>
+                        </div>
+                        <p class="text-slate-300 leading-relaxed">
+                            Im Grundzustand taumeln alle Protonen völlig unkoordiniert (außer Phase) – ihre Querkomponenten heben sich gegenseitig auf ($M_{xy}=0$). Der Hochfrequenz-Impuls hat <strong>exakt die Larmor-Frequenz</strong> (Resonanz!) und bewirkt zwei Dinge gleichzeitig: Er kippt die Magnetisierung um 90° in die xy-Ebene und zwingt alle Spins in den <strong>Gleichtakt (Phasenkohärenz)</strong>.
+                        </p>
+                    </div>
+                    <div class="mt-3 pt-2.5 border-t border-slate-800 text-amber-300/90 text-xs">
+                        <strong>💡 Schaukel-Analogie:</strong> Eine Schaukel (Proton) lässt sich nur anschubsen, wenn man genau im richtigen Takt (Larmor-Frequenz) drückt.
+                    </div>
+                </div>
+
+                <!-- Card 4: T1 Relaxation -->
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                    <div>
+                        <div class="text-sky-400 font-bold mb-1 flex items-center justify-between">
+                            <span>4. T1-Relaxation (Längsrelaxation)</span>
+                            <span class="text-base">🔋</span>
+                        </div>
+                        <p class="text-slate-300 leading-relaxed">
+                            Nach Abschalten des HF-Impulses wollen die angeregten Protonen ihre aufgenommene Energie wieder an das umliegende Molekülgitter („Spin-Gitter“) als Wärme abgeben und sich wieder parallel zu $B_0$ aufrichten. $M_z$ wächst von 0 zurück auf 100%. <strong>T1 ist die Zeit, bis 63% von $M_z$ wiederhergestellt sind.</strong>
+                        </p>
+                    </div>
+                    <div class="mt-3 pt-2.5 border-t border-slate-800 text-amber-300/90 text-xs">
+                        <strong>💡 Merke für T1-Bilder:</strong> <strong>Fett</strong> gibt Energie extrem schnell ab (kurze T1 → <strong>hell</strong> im T1-Bild). <strong>Wasser/Liquor</strong> braucht sehr lange (lange T1 → <strong>dunkel</strong> im T1-Bild).
+                    </div>
+                </div>
+
+                <!-- Card 5: T2 vs T2* Relaxation -->
+                <div class="bg-slate-900/90 p-4 rounded-xl border border-slate-800 md:col-span-2 flex flex-col justify-between">
+                    <div>
+                        <div class="text-purple-400 font-bold mb-1 flex items-center justify-between">
+                            <span>5. Der Unterschied zwischen T2 und T2* (Querrelaxation & Spin-Echo)</span>
+                            <span class="text-base">🏃‍♂️🏃‍♀️</span>
+                        </div>
+                        <p class="text-slate-300 leading-relaxed">
+                            Direkt nach dem 90°-Impuls zeigen alle Spins in der xy-Ebene in dieselbe Richtung. Sofort beginnen sie jedoch unterschiedlich schnell zu rotieren und fächern sich auf (<strong>Dephasierung</strong>) – der Summenvektor $M_{xy}$ schrumpft rasch gegen Null. Dafür gibt es zwei Ursachen:
+                        </p>
+                        <ul class="list-disc list-inside text-slate-300 mt-2 space-y-1">
+                            <li><strong>Wahre T2 (Spin-Spin-Wechselwirkung):</strong> Die Protonen stoßen zufällig miteinander zusammen und beeinflussen sich magnetisch. Dieser Prozess ist <em>zufällig und unumkehrbar (irreversibel)</em>.</li>
+                            <li><strong>T2* (T2-Stern = T2 + Magnetfeld-Inhomogenitäten):</strong> Da kein MRT-Magnet perfekt gleichmäßig ist, ist $B_0$ an manchen Orten minimal stärker als an anderen. Spins am stärkeren Ort rotieren dauerhaft etwas schneller. Dadurch fächern sie viel schneller auf! Dieser Anteil ist <em>statisch und durch einen 180°-Impuls umkehrbar</em>.</li>
+                        </ul>
+                    </div>
+                    <div class="mt-3 pt-2.5 border-t border-slate-800 text-amber-300/90 text-xs">
+                        <strong>💡 Stadionläufer-Analogie (Klicke oben auf Schritt 4!):</strong> Stell dir 12 Läufer vor, die gleichzeitig starten (90°-Impuls). Einige sind von Natur aus fitter als andere (feste $B_0$-Inhomogenität) – das Feld zieht sich schnell auseinander (<strong>T2*-Zerfall</strong>). Nach der halben Zeit pfeift der Trainer (<strong>180°-Impuls</strong>): Alle Läufer müssen sich umdrehen und zurück zum Start rennen! Jetzt liegen die schnellen Läufer ganz hinten, holen aber genau bis zur Startlinie die langsamen Läufer wieder ein: Alle kommen gleichzeitig im Ziel an (<strong>Spin-Echo!</strong>). Was sich nicht korrigieren lässt, ist das zufällige Stolpern unterwegs (<strong>echte T2</strong>).
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // ==========================================
+        // 1. PHYSIK- & GEWEBE-PARAMETER
+        // ==========================================
+        const TISSUES = {
+            fett: {
+                name: "Fettgewebe",
+                t1: 180,     // ms (Simulations-Skala für gute Sichtbarkeit)
+                t2: 90,      // ms
+                t2Star: 35,  // ms
+                desc: "Fett hat große Kohlenwasserstoffketten, die perfekt zur Larmor-Frequenz passen: Die Energieabgabe ans Gitter ist extrem effizient (sehr kurze T1)."
+            },
+            wm: {
+                name: "Weiße Substanz",
+                t1: 320,
+                t2: 110,
+                t2Star: 45,
+                desc: "Myelinreiche Nervenfasern im Gehirn haben eine mittlere T1- und T2-Relaxationszeit."
+            },
+            liquor: {
+                name: "Liquor / Freies Wasser",
+                t1: 650,
+                t2: 320,
+                t2Star: 75,
+                desc: "Kleine Wassermoleküle bewegen sich viel zu schnell und chaotisch: Sie können ihre Energie kaum ans Gitter abgeben (sehr lange T1) und bleiben lange in Phase (lange T2)."
+            }
+        };
+
+        let currentTissue = 'fett';
+        let includeInhomogeneity = true;
+
+        // Simulations-Status
+        let currentPhase = 1; // 1 = B0 Grundzustand, 2 = 90° Puls, 3 = Relaxation, 4 = 180° Spin Echo
+        let simTime = 0;      // in ms (Simulationszeit)
+        let echoTimeTE = 0;   // Zeitpunkt des Spin-Echos (2 * t_180)
+        let t180Time = 0;     // Zeitpunkt des 180° Impulses
+        let flipProgress = 0; // 0 bis 1 während des 90° Impulses
+        let flip180Progress = 1; // Animation für 180° Impuls
+
+        const NUM_SPINS = 16;
+        const LARMOR_OMEGA = 0.055; // Grund-Rotationsgeschwindigkeit im 3D-Raum
+        const spins = [];
+
+        // Historie für die 3 Echtzeit-Graphen (max 300 Datenpunkte)
+        const MAX_GRAPH_POINTS = 260;
+        let historyData = [];
+
+        // ==========================================
+        // 2. ERKLÄRUNGSTEXTE FÜR DIE SCHRITTE
+        // ==========================================
+        const EXPLANATIONS = {
+            1: {
+                icon: "🧭",
+                title: "1. Grundzustand im starken Hauptmagnetfeld (B₀)",
+                badge: "Larmor-Präzession • Außer Phase",
+                text: "Der Patient liegt im MRT-Rohr (Magnetfeld B₀ zeigt entlang der z-Achse nach oben). Etwas mehr Wasserstoff-Protonen richten sich parallel (nach oben) als antiparallel aus. Alle gelben Einzel-Spins präzedieren (taumeln) mit der Larmor-Frequenz um die z-Achse, sind aber völlig unkoordiniert (außer Phase).",
+                analogy: "🔍 Beobachte im 3D-Modell: Da die gelben Spins in alle Himmelsrichtungen zeigen, heben sich ihre Querkomponenten in der xy-Ebene komplett auf (Mxy = 0%). Es bleibt nur ein stabiler grüner Summenvektor entlang der z-Achse (Mz = 100%). Da Mz stillsteht, wird in der Empfangsspule rechts KEINE Spannung induziert (0 mV)."
+            },
+            2: {
+                icon: "⚡",
+                title: "2. 90°-HF-Impuls: Anregung & Phasensynchronisation",
+                badge: "Resonanz • Maximale Quermagnetisierung",
+                text: "Eine Sendespule strahlt kurzzeitig eine Radiowelle (Hochfrequenz-Impuls) exakt mit der Larmor-Frequenz ein. Dadurch passieren zwei Dinge gleichzeitig: 1. Die Längsmagnetisierung Mz wird um 90° komplett in die xy-Ebene gekippt (Mz = 0%). 2. Alle Einzel-Spins werden gezwungen, im exakten Gleichtakt (in Phase) gemeinsam zu rotieren!",
+                analogy: "🔍 Beobachte im 3D-Modell & Graph 3: Alle gelben Pfeile sind jetzt gebündelt und rotieren als starker roter Quer-Vektor (Mxy = 100%) wie ein Leuchtturm-Strahl durch die xy-Ebene. Jedes Mal, wenn der Vektor an der Empfangsspule vorbeistreicht, induziert er dort eine maximale Wechselspannung!"
+            },
+            3: {
+                icon: "🌀",
+                title: "3. Relaxation: T2/T2*-Dephasierung & T1-Wiederaufbau",
+                badge: "Freier Induktionszerfall (FID)",
+                text: "Der HF-Impuls ist abgeschaltet. Jetzt laufen zwei unabhängige Prozesse ab: In der xy-Ebene rotieren einige Spins etwas schneller, andere langsamer – das Bündel fächert sich auf (Dephasierung) und Mxy verschwindet rasch (T2*-Zerfall). Gleichzeitig richten sich die Spins langsam wieder entlang der z-Achse auf, indem sie Energie ans Gewebe abgeben (T1-Erholung von Mz).",
+                analogy: "🔍 Tipp: Klicke jetzt auf 'Schritt 4 (180°-Spin-Echo)', während die Spins auseinandergelaufen sind, oder schalte oben rechts das Gewebe zwischen 'Fett' (schnelle Erholung) und 'Liquor' (langsame Erholung) um!"
+            },
+            4: {
+                icon: "🔄",
+                title: "4. 180°-Refokussierung: Das Spin-Echo entlarvt die wahre T2!",
+                badge: "Spin-Echo • B₀-Inhomogenität ausgetrickst",
+                text: "Ein 180°-Impuls klappt alle aufgefächerten Spins in der xy-Ebene wie einen Pfannkuchen um! Die Spins, die wegen lokaler Magnetfeld-Inhomogenitäten schneller rotieren, liegen nun hinten – holen aber die langsamen Spins wieder ein. Zum Zeitpunkt TE treffen sich alle Spins wieder in einem Bündel: Das Signal in der Spule flammt als 'Spin-Echo' erneut auf!",
+                analogy: "🔍 Blick auf Graph 2 (rechts Mitte): Die rote Kurve (Mxy) war durch T2* schon fast auf Null gefallen, steigt aber beim Spin-Echo noch einmal exakt bis an die gestrichelte lila Kurve (wahre T2) an! So trennt das MRT im Spin-Echo künstliche Magnetfeld-Fehler von der echten Gewebe-T2."
+            }
+        };
+
+        function updateExplanationUI(phase) {
+            const exp = EXPLANATIONS[phase];
+            document.getElementById('explanation-icon').textContent = exp.icon;
+            document.getElementById('explanation-title').textContent = exp.title;
+            document.getElementById('explanation-badge').textContent = exp.badge;
+            document.getElementById('explanation-text').textContent = exp.text;
+            document.getElementById('explanation-analogy').textContent = exp.analogy;
+
+            for (let i = 1; i <= 4; i++) {
+                const btn = document.getElementById(`phase-btn-${i}`);
+                if (i === phase) {
+                    btn.classList.add('active-phase-btn');
+                } else {
+                    btn.classList.remove('active-phase-btn');
+                }
+            }
+        }
+
+        // ==========================================
+        // 3. THREE.JS 3D-SZENE INITIALISIEREN
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
+        // Kugelige Kamera-Koordinaten für Maus-Rotation
+        let camTheta = 0.65;
+        let camPhi = 1.05;
+        const camRadius = 9.2;
+
+        function updateCameraPosition() {
+            camera.position.x = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+            camera.position.z = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+            camera.position.y = camRadius * Math.cos(camPhi);
+            camera.lookAt(0, 0.3, 0);
+        }
+        updateCameraPosition();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        // Beleuchtung
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Koordinatensystem & xy-Transversalebene (MRT: Three.js Y ist unsere physikalische Z-Achse B0!)
+        const gridHelper = new THREE.PolarGridHelper(2.6, 16, 4, 64, 0x334155, 0x1e293b);
+        scene.add(gridHelper);
+
+        // Semitransparente xy-Kreisscheibe
+        const planeGeo = new THREE.CircleGeometry(2.6, 64);
+        const planeMat = new THREE.MeshBasicMaterial({
+            color: 0x1e293b,
+            transparent: true,
+            opacity: 0.35,
+            side: THREE.DoubleSide
+        });
+        const xyDisk = new THREE.Mesh(planeGeo, planeMat);
+        xyDisk.rotation.x = -Math.PI / 2;
+        scene.add(xyDisk);
+
+        // Z-Achse (B0 Hauptmagnetfeld nach oben)
+        const zAxisGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, -1.2, 0),
+            new THREE.Vector3(0, 3.0, 0)
+        ]);
+        const zAxisMat = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 2 });
+        scene.add(new THREE.Line(zAxisGeo, zAxisMat));
+
+        // B0 Richtungspfeil-Spitze ganz oben an der z-Achse
+        const b0Cone = new THREE.Mesh(
+            new THREE.ConeGeometry(0.1, 0.3, 16),
+            new THREE.MeshBasicMaterial({ color: 0x60a5fa })
+        );
+        b0Cone.position.set(0, 3.0, 0);
+        scene.add(b0Cone);
+
+        // Empfangsspule (Kupferspule auf der X-Achse platziert)
+        const coilGroup = new THREE.Group();
+        const coilMat = new THREE.MeshStandardMaterial({
+            color: 0xd97706,
+            metalness: 0.7,
+            roughness: 0.25,
+            emissive: 0x000000
+        });
+        for (let i = -1; i <= 1; i++) {
+            const loopGeo = new THREE.TorusGeometry(0.55, 0.045, 16, 48);
+            const loopMesh = new THREE.Mesh(loopGeo, coilMat);
+            loopMesh.rotation.y = Math.PI / 2;
+            loopMesh.position.x = 2.75 + i * 0.11;
+            coilGroup.add(loopMesh);
+        }
+        scene.add(coilGroup);
+
+        // Hilfsfunktion für schöne 3D-Vektorpfeile
+        function createCustomArrow(color, radiusShaft, radiusHead, headLength) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.3,
+                metalness: 0.2,
+                emissive: color,
+                emissiveIntensity: 0.2
+            });
+
+            const shaftGeo = new THREE.CylinderGeometry(radiusShaft, radiusShaft, 1, 16);
+            shaftGeo.translate(0, 0.5, 0);
+            const shaft = new THREE.Mesh(shaftGeo, mat);
+
+            const headGeo = new THREE.ConeGeometry(radiusHead, headLength, 20);
+            headGeo.translate(0, headLength / 2, 0);
+            const head = new THREE.Mesh(headGeo, mat);
+
+            group.add(shaft);
+            group.add(head);
+
+            group.setVector = function(vec) {
+                const len = vec.length();
+                if (len < 0.04) {
+                    group.visible = false;
+                    return;
+                }
+                group.visible = true;
+                const shaftLen = Math.max(0.01, len - headLength);
+                shaft.scale.set(1, shaftLen, 1);
+                head.position.y = shaftLen;
+
+                const up = new THREE.Vector3(0, 1, 0);
+                const dir = vec.clone().normalize();
+                group.quaternion.setFromUnitVectors(up, dir);
+            };
+            return group;
+        }
+
+        // Einzelne Protonen-Spins (gelbe Pfeile) initialisieren
+        for (let i = 0; i < NUM_SPINS; i++) {
+            const arrow = createCustomArrow(0xfde047, 0.025, 0.07, 0.18);
+            scene.add(arrow);
+
+            // Gleichmäßige Verteilung für die Zufalls-Startphase und die statische Feldinhomogenität
+            const randomPhase = (i / NUM_SPINS) * Math.PI * 2 + (Math.random() * 0.2);
+            // Statischer B0-Gradienten-Offset (-1 bis +1)
+            const staticDeltaOmega = ((i / (NUM_SPINS - 1)) - 0.5) * 2.0;
+
+            spins.push({
+                mesh: arrow,
+                basePhase: randomPhase,
+                phase: randomPhase,
+                staticOffset: staticDeltaOmega,
+                randomWalkPhase: 0,
+                theta: 0.55 // Kegelwinkel im Grundzustand (~31 Grad)
+            });
+        }
+
+        // Summenvektoren: M (grün), Mz (blau auf z-Achse), Mxy (rot in der xy-Ebene)
+        const netMArrow = createCustomArrow(0x10b981, 0.065, 0.16, 0.36);
+        const netMzArrow = createCustomArrow(0x38bdf8, 0.05, 0.13, 0.3);
+        const netMxyArrow = createCustomArrow(0xf43f5e, 0.055, 0.14, 0.32);
+        scene.add(netMArrow);
+        scene.add(netMzArrow);
+        scene.add(netMxyArrow);
+
+        // ==========================================
+        // 4. MAUS- & TOUCH-STEUERUNG FÜR 3D-KAMERA
+        // ==========================================
+        let isDragging = false;
+        let prevMouse = { x: 0, y: 0 };
+
+        container.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            prevMouse = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - prevMouse.x;
+            const dy = e.clientY - prevMouse.y;
+            camTheta += dx * 0.008;
+            camPhi = Math.max(0.25, Math.min(Math.PI / 2 - 0.05, camPhi - dy * 0.008));
+            updateCameraPosition();
+            prevMouse = { x: e.clientX, y: e.clientY };
+        });
+
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+        }, { passive: true });
+        window.addEventListener('touchend', () => { isDragging = false; });
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - prevMouse.x;
+            const dy = e.touches[0].clientY - prevMouse.y;
+            camTheta += dx * 0.008;
+            camPhi = Math.max(0.25, Math.min(Math.PI / 2 - 0.05, camPhi - dy * 0.008));
+            updateCameraPosition();
+            prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }, { passive: true });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // ==========================================
+        // 5. INTERAKTIVE STEUERUNG (PHASEN & GEWEBE)
+        // ==========================================
+        function setTissue(tissueKey) {
+            currentTissue = tissueKey;
+            const t = TISSUES[tissueKey];
+
+            // Buttons aktualisieren
+            document.querySelectorAll('.tissue-btn').forEach(btn => {
+                btn.className = "tissue-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-white border border-transparent";
+            });
+            const activeBtn = document.getElementById(`btn-tissue-${tissueKey}`);
+            activeBtn.className = "tissue-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-amber-500/20 text-amber-300 border border-amber-500/40";
+
+            // Badges aktualisieren
+            document.getElementById('t1-val-badge').textContent = `T1 = ${t.t1} ms`;
+            document.getElementById('t2-val-badge').textContent = `T2 = ${t.t2} ms | T2* = ${t.t2Star} ms`;
+
+            // Wenn wir gerade in der Relaxation sind, starten wir Schritt 3 frisch für den direkten Vergleich
+            if (currentPhase >= 3) {
+                setPhase(3);
+            }
+        }
+
+        function toggleInhomogeneity() {
+            includeInhomogeneity = document.getElementById('toggle-inhomogeneity').checked;
+        }
+
+        function setPhase(phase) {
+            currentPhase = phase;
+            updateExplanationUI(phase);
+
+            if (phase === 1) {
+                // Grundzustand entlang B0
+                simTime = 0;
+                historyData = [];
+                spins.forEach((s, idx) => {
+                    s.phase = (idx / NUM_SPINS) * Math.PI * 2;
+                    s.randomWalkPhase = 0;
+                });
+            } else if (phase === 2) {
+                // 90° Impuls: Kippen und Synchronisieren
+                simTime = 0;
+                flipProgress = 0;
+                historyData = [];
+                spins.forEach(s => {
+                    s.randomWalkPhase = 0;
+                });
+            } else if (phase === 3) {
+                // Relaxation starten (Falls vorher in Schritt 1, direkt aus 90°-Zustand starten)
+                simTime = 0;
+                t180Time = 0;
+                echoTimeTE = 0;
+                historyData = [];
+                const commonAngle = spins[0].phase;
+                spins.forEach(s => {
+                    s.phase = commonAngle;
+                    s.randomWalkPhase = 0;
+                });
+            }
+        }
+
+        function triggerSpinEcho() {
+            // Wenn noch nicht in Relaxation, erst kurz in Relaxation setzen
+            if (currentPhase !== 3 && currentPhase !== 4) {
+                setPhase(3);
+                simTime = 75; // direkt etwas dephasieren lassen, damit man den Effekt sofort sieht
+            }
+            currentPhase = 4;
+            updateExplanationUI(4);
+
+            t180Time = simTime;
+            echoTimeTE = simTime * 2;
+            flip180Progress = 0;
+        }
+
+        // ==========================================
+        // 6. ECHTZEIT-GRAPHEN ZEICHNEN (2D CANVAS)
+        // ==========================================
+        function drawGraphs() {
+            const cT1 = document.getElementById('canvas-t1');
+            const cT2 = document.getElementById('canvas-t2');
+            const cFID = document.getElementById('canvas-fid');
+
+            [cT1, cT2, cFID].forEach(c => {
+                if (c.width !== c.clientWidth || c.height !== c.clientHeight) {
+                    c.width = c.clientWidth;
+                    c.height = c.clientHeight;
+                }
+            });
+
+            const ctx1 = cT1.getContext('2d');
+            const ctx2 = cT2.getContext('2d');
+            const ctx3 = cFID.getContext('2d');
+
+            const w = cT1.width;
+            const h = cT1.height;
+
+            // Hintergrund & Hilfslinien
+            [ctx1, ctx2, ctx3].forEach((ctx, idx) => {
+                ctx.clearRect(0, 0, w, h);
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 1;
+                // Horizontale Rasterlinien
+                for (let y = 0.2; y <= 0.8; y += 0.3) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, h * y);
+                    ctx.lineTo(w, h * y);
+                    ctx.stroke();
+                }
+            });
+
+            // Theoretische Referenzkurven im Hintergrund (dezent gestrichelt)
+            const tissue = TISSUES[currentTissue];
+
+            // Graph 1: Mz(t) Kurve
+            if (historyData.length > 1) {
+                ctx1.beginPath();
+                ctx1.strokeStyle = '#38bdf8';
+                ctx1.lineWidth = 2.5;
+                historyData.forEach((pt, i) => {
+                    const x = (i / MAX_GRAPH_POINTS) * w;
+                    const y = h - 10 - pt.mz * (h - 22);
+                    if (i === 0) ctx1.moveTo(x, y);
+                    else ctx1.lineTo(x, y);
+                });
+                ctx1.stroke();
+
+                // Aktueller Punkt
+                const last = historyData[historyData.length - 1];
+                const lx = ((historyData.length - 1) / MAX_GRAPH_POINTS) * w;
+                const ly = h - 10 - last.mz * (h - 22);
+                ctx1.fillStyle = '#38bdf8';
+                ctx1.beginPath();
+                ctx1.arc(lx, ly, 4, 0, Math.PI * 2);
+                ctx1.fill();
+            }
+
+            // Graph 2: Reine T2 (gestrichelt lila) & tatsächliche Mxy / T2* (rot)
+            if (historyData.length > 1) {
+                // Gestrichelte wahre T2-Hüllkurve
+                ctx2.save();
+                ctx2.beginPath();
+                ctx2.setLineDash([5, 4]);
+                ctx2.strokeStyle = '#c084fc';
+                ctx2.lineWidth = 2;
+                historyData.forEach((pt, i) => {
+                    const x = (i / MAX_GRAPH_POINTS) * w;
+                    const y = h - 10 - pt.trueT2 * (h - 22);
+                    if (i === 0) ctx2.moveTo(x, y);
+                    else ctx2.lineTo(x, y);
+                });
+                ctx2.stroke();
+                ctx2.restore();
+
+                // Tatsächliche Mxy Kurve (T2* + ggf. Spin-Echo)
+                ctx2.beginPath();
+                ctx2.strokeStyle = '#f43f5e';
+                ctx2.lineWidth = 2.5;
+                historyData.forEach((pt, i) => {
+                    const x = (i / MAX_GRAPH_POINTS) * w;
+                    const y = h - 10 - pt.mxy * (h - 22);
+                    if (i === 0) ctx2.moveTo(x, y);
+                    else ctx2.lineTo(x, y);
+                });
+                ctx2.stroke();
+
+                // Markierung für 180° Impuls und Spin-Echo, falls aktiv
+                historyData.forEach((pt, i) => {
+                    const x = (i / MAX_GRAPH_POINTS) * w;
+                    if (pt.is180Pulse) {
+                        ctx2.fillStyle = '#c084fc';
+                        ctx2.font = 'bold 10px Inter';
+                        ctx2.fillText('180°', x - 10, 14);
+                        ctx2.strokeStyle = 'rgba(192, 132, 252, 0.5)';
+                        ctx2.beginPath();
+                        ctx2.moveTo(x, 18);
+                        ctx2.lineTo(x, h);
+                        ctx2.stroke();
+                    }
+                    if (pt.isEchoPeak) {
+                        ctx2.fillStyle = '#34d399';
+                        ctx2.font = 'bold 10px Inter';
+                        ctx2.fillText('Spin-Echo (TE)', Math.max(4, x - 35), 26);
+                    }
+                });
+            }
+
+            // Graph 3: Induzierte Wechselspannung in der Spule (FID)
+            const midY = h / 2;
+            ctx3.strokeStyle = '#334155';
+            ctx3.beginPath();
+            ctx3.moveTo(0, midY);
+            ctx3.lineTo(w, midY);
+            ctx3.stroke();
+
+            if (historyData.length > 1) {
+                ctx3.beginPath();
+                ctx3.strokeStyle = '#fbbf24';
+                ctx3.lineWidth = 2;
+                historyData.forEach((pt, i) => {
+                    const x = (i / MAX_GRAPH_POINTS) * w;
+                    const y = midY - pt.voltage * (h * 0.42);
+                    if (i === 0) ctx3.moveTo(x, y);
+                    else ctx3.lineTo(x, y);
+                });
+                ctx3.stroke();
+            }
+        }
+
+        // ==========================================
+        // 7. HAUPT-ANIMATIONSSCHLEIFE (PHYSIK-ENGINE)
+        // ==========================================
+        let meanPhaseAngle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const tissue = TISSUES[currentTissue];
+            let mzNorm = 1.0;
+            let mxyNorm = 0.0;
+            let trueT2Norm = 0.0;
+            let is180Marker = false;
+            let isEchoMarker = false;
+
+            meanPhaseAngle += LARMOR_OMEGA;
+
+            if (currentPhase === 1) {
+                // SCHRITT 1: Grundzustand (Spins präzedieren außer Phase auf einem Kegel um B0)
+                mzNorm = 1.0;
+                mxyNorm = 0.0;
+                trueT2Norm = 0.0;
+
+                spins.forEach((s) => {
+                    s.phase += LARMOR_OMEGA;
+                    const coneAngle = 0.55; // ~31 Grad Öffnungswinkel
+                    const vx = Math.sin(coneAngle) * Math.cos(s.phase);
+                    const vz = Math.sin(coneAngle) * Math.sin(s.phase);
+                    const vy = Math.cos(coneAngle); // Y in Three.js ist Z (B0)
+                    s.mesh.setVector(new THREE.Vector3(vx, vy, vz).multiplyScalar(1.9));
+                });
+
+            } else if (currentPhase === 2) {
+                // SCHRITT 2: 90°-HF-Impuls (Kippen in die xy-Ebene & Bündeln in Phase)
+                flipProgress = Math.min(1, flipProgress + 0.025);
+                simTime += 1.5;
+
+                // Von Mz=1, Mxy=0 zu Mz=0, Mxy=1
+                const tiltAngle = flipProgress * (Math.PI / 2);
+                mzNorm = Math.cos(tiltAngle);
+                mxyNorm = Math.sin(tiltAngle);
+                trueT2Norm = mxyNorm;
+
+                spins.forEach((s, idx) => {
+                    // Phasen bündeln sich während des 90° Impulses auf meanPhaseAngle
+                    const initialSpread = (idx / NUM_SPINS) * Math.PI * 2;
+                    const syncPhase = meanPhaseAngle + (1 - flipProgress) * initialSpread;
+                    s.phase = syncPhase;
+
+                    const coneAngle = (1 - flipProgress) * 0.55 + flipProgress * (Math.PI / 2);
+                    const vx = Math.sin(coneAngle) * Math.cos(s.phase);
+                    const vz = Math.sin(coneAngle) * Math.sin(s.phase);
+                    const vy = Math.cos(coneAngle);
+                    s.mesh.setVector(new THREE.Vector3(vx, vy, vz).multiplyScalar(1.9));
+                });
+
+            } else if (currentPhase === 3 || currentPhase === 4) {
+                // SCHRITT 3 & 4: Relaxation (T1, T2, T2* & optional 180°-Spin-Echo)
+                const prevTime = simTime;
+                simTime += 1.6;
+
+                if (currentPhase === 4 && flip180Progress === 0) {
+                    is180Marker = true;
+                }
+                if (currentPhase === 4 && prevTime < echoTimeTE && simTime >= echoTimeTE) {
+                    isEchoMarker = true;
+                }
+                if (flip180Progress < 1) {
+                    flip180Progress = Math.min(1, flip180Progress + 0.08);
+                }
+
+                // 1. T1-Längsrelaxation: Mz(t) = 1 - exp(-t / T1)
+                mzNorm = 1.0 - Math.exp(-simTime / tissue.t1);
+
+                // 2. Wahre T2-Querrelaxation (irreversibel): exp(-t / T2)
+                trueT2Norm = Math.exp(-simTime / tissue.t2);
+
+                // 3. Reversibler T2*-Anteil durch B0-Inhomogenität
+                // Effektive Dephasierungszeit: Vor 180°-Puls wächst sie mit t, nach 180°-Puls schrumpft sie bis TE auf 0!
+                let effectiveInhomogeneityTime = simTime;
+                if (currentPhase === 4) {
+                    effectiveInhomogeneityTime = Math.abs(simTime - echoTimeTE);
+                }
+
+                // Geschwindigkeit der statischen Auffächerung aus T2 und T2* berechnen
+                const inhomogeneityRate = includeInhomogeneity
+                    ? (1 / tissue.t2Star - 1 / tissue.t2)
+                    : 0;
+
+                const reversibleFactor = Math.exp(-effectiveInhomogeneityTime * inhomogeneityRate);
+                mxyNorm = trueT2Norm * reversibleFactor;
+
+                // Einzelne Spins im 3D-Raum aktualisieren
+                const zComponent = mzNorm;
+                const xyRadius = Math.sqrt(Math.max(0, 1 - zComponent * zComponent));
+
+                // Auffächerungswinkel für die visuelle Darstellung der Einzel-Spins
+                const irreversibleSpread = (1 - trueT2Norm) * Math.PI * 1.15;
+                const reversibleSpread = includeInhomogeneity
+                    ? (1 - reversibleFactor) * Math.PI * 1.35 * (currentPhase === 4 && simTime < echoTimeTE ? -1 : 1)
+                    : 0;
+
+                spins.forEach((s, idx) => {
+                    // Jedes Proton hat seinen festen Platz im B0-Gradienten + irreversiblen Anteil
+                    const spinSpreadOffset = s.staticOffset * (reversibleSpread + irreversibleSpread);
+                    s.phase = meanPhaseAngle + spinSpreadOffset;
+
+                    const vx = xyRadius * Math.cos(s.phase);
+                    const vz = xyRadius * Math.sin(s.phase);
+                    const vy = zComponent;
+                    s.mesh.setVector(new THREE.Vector3(vx, vy, vz).multiplyScalar(1.9));
+                });
+            }
+
+            // Summenvektoren im 3D-Raum setzen (Länge 2.3 für deutliche Sichtbarkeit)
+            const VEC_SCALE = 2.35;
+            const mxyX = mxyNorm * Math.cos(meanPhaseAngle) * VEC_SCALE;
+            const mxyZ = mxyNorm * Math.sin(meanPhaseAngle) * VEC_SCALE;
+            const mzY = mzNorm * VEC_SCALE;
+
+            netMzArrow.setVector(new THREE.Vector3(0, mzY, 0));
+            netMxyArrow.setVector(new THREE.Vector3(mxyX, 0.02, mxyZ));
+            netMArrow.setVector(new THREE.Vector3(mxyX, mzY, mxyZ));
+
+            // Induzierte Spannung in der Empfangsspule nach Faraday:
+            // Nur die zeitliche Änderung von Mxy entlang der Spulenachse (x) induziert Spannung!
+            const inducedVoltage = mxyNorm * Math.sin(meanPhaseAngle);
+
+            // Spule zum Leuchten bringen, wenn Spannung induziert wird
+            const glowIntensity = Math.abs(inducedVoltage);
+            coilMat.emissive.setRGB(glowIntensity * 0.95, glowIntensity * 0.45, 0.0);
+
+            // UI-Anzeigen aktualisieren
+            document.getElementById('sim-timer').textContent = `t = ${Math.round(simTime)} ms`;
+            document.getElementById('readout-mz').textContent = `${Math.round(mzNorm * 100)}%`;
+            document.getElementById('readout-mxy').textContent = `${Math.round(mxyNorm * 100)}%`;
+            document.getElementById('readout-t2').textContent = `${Math.round(trueT2Norm * 100)}%`;
+
+            const voltageMv = (inducedVoltage * 12.5).toFixed(2);
+            document.getElementById('coil-voltage-text').textContent = `Induktion: ${voltageMv >= 0 ? '+' : ''}${voltageMv} mV`;
+            const coilLed = document.getElementById('coil-led');
+            if (mxyNorm > 0.08) {
+                coilLed.className = "w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24]";
+            } else {
+                coilLed.className = "w-3 h-3 rounded-full bg-slate-600";
+            }
+
+            // Datenpunkt für die Echtzeit-Graphen speichern
+            historyData.push({
+                mz: mzNorm,
+                mxy: mxyNorm,
+                trueT2: trueT2Norm,
+                voltage: inducedVoltage,
+                is180Pulse: is180Marker,
+                isEchoPeak: isEchoMarker
+            });
+            if (historyData.length > MAX_GRAPH_POINTS) {
+                historyData.shift();
+            }
+
+            drawGraphs();
+            renderer.render(scene, camera);
+        }
+
+        // Start der Anwendung
+        window.onload = function () {
+            setTissue('fett');
+            setPhase(1);
+            animate();
+        };
+    </script>
+</body>
+</html>
